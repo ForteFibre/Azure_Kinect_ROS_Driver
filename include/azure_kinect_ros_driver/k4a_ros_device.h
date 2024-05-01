@@ -36,8 +36,8 @@
 
 class K4AROSDevice : public rclcpp::Node
 {
- public:
-  K4AROSDevice();
+public:
+  K4AROSDevice(const rclcpp::NodeOptions& options);
 
   ~K4AROSDevice();
 
@@ -52,36 +52,43 @@ class K4AROSDevice : public rclcpp::Node
 
   void getRgbCameraInfo(sensor_msgs::msg::CameraInfo& camera_info);
 
-  k4a_result_t getDepthFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& depth_frame, bool rectified);
+  k4a_result_t getDepthFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& depth_frame,
+                             bool rectified);
 
   k4a_result_t getPointCloud(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
 
-  k4a_result_t getRgbPointCloudInRgbFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
-  k4a_result_t getRgbPointCloudInDepthFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
+  k4a_result_t getRgbPointCloudInRgbFrame(const k4a::capture& capture,
+                                          std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
+  k4a_result_t getRgbPointCloudInDepthFrame(const k4a::capture& capture,
+                                            std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
 
   k4a_result_t getImuFrame(const k4a_imu_sample_t& capture, std::shared_ptr<sensor_msgs::msg::Imu>& imu_frame);
 
-  k4a_result_t getRbgFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& rgb_frame, bool rectified);
-  k4a_result_t getJpegRgbFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::CompressedImage>& jpeg_image);
+  k4a_result_t getRbgFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& rgb_frame,
+                           bool rectified);
+  k4a_result_t getJpegRgbFrame(const k4a::capture& capture,
+                               std::shared_ptr<sensor_msgs::msg::CompressedImage>& jpeg_image);
 
   k4a_result_t getIrFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& ir_image);
 
 #if defined(K4A_BODY_TRACKING)
-  k4a_result_t getBodyMarker(const k4abt_body_t& body, std::shared_ptr<visualization_msgs::msg::Marker> marker_msg, int jointType,
-                             rclcpp::Time capture_time);
+  k4a_result_t getBodyMarker(const k4abt_body_t& body, std::shared_ptr<visualization_msgs::msg::Marker> marker_msg,
+                             int jointType, rclcpp::Time capture_time);
 
-  k4a_result_t getBodyIndexMap(const k4abt::frame& body_frame, std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image);
+  k4a_result_t getBodyIndexMap(const k4abt::frame& body_frame,
+                               std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image);
 
-  k4a_result_t renderBodyIndexMapToROS(std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image, k4a::image& k4a_body_index_map,
-                                       const k4abt::frame& body_frame);
+  k4a_result_t renderBodyIndexMapToROS(std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image,
+                                       k4a::image& k4a_body_index_map, const k4abt::frame& body_frame);
 #endif
 
- private:
+private:
   k4a_result_t renderBGRA32ToROS(std::shared_ptr<sensor_msgs::msg::Image>& rgb_frame, k4a::image& k4a_bgra_frame);
   k4a_result_t renderDepthToROS(std::shared_ptr<sensor_msgs::msg::Image>& depth_image, k4a::image& k4a_depth_frame);
   k4a_result_t renderIrToROS(std::shared_ptr<sensor_msgs::msg::Image>& ir_image, k4a::image& k4a_ir_frame);
 
-  k4a_result_t fillPointCloud(const k4a::image& pointcloud_image, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
+  k4a_result_t fillPointCloud(const k4a::image& pointcloud_image,
+                              std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
   k4a_result_t fillColorPointCloud(const k4a::image& pointcloud_image, const k4a::image& color_image,
                                    std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud);
 
@@ -113,7 +120,6 @@ class K4AROSDevice : public rclcpp::Node
   k4a_imu_sample_t computeMeanIMUSample(const std::vector<k4a_imu_sample_t>& samples);
 
   void printTimestampDebugMessage(const std::string& name, const rclcpp::Time& timestamp);
-
 
   image_transport::Publisher rgb_raw_publisher_;
   rclcpp::Publisher<sensor_msgs::msg::CompressedImage>::SharedPtr rgb_jpeg_publisher_;
@@ -159,7 +165,7 @@ class K4AROSDevice : public rclcpp::Node
   std::thread body_publisher_thread_;
 #endif
 
-  std::chrono::nanoseconds device_to_realtime_offset_{0};
+  std::chrono::nanoseconds device_to_realtime_offset_{ 0 };
 
   // Thread control
   volatile bool running_;

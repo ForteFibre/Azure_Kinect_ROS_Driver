@@ -34,19 +34,20 @@ using namespace std;
 using namespace visualization_msgs::msg;
 #endif
 
-K4AROSDevice::K4AROSDevice()
-  : Node("k4a_ros_device_node"),
-    k4a_device_(nullptr),
-    k4a_playback_handle_(nullptr),
+K4AROSDevice::K4AROSDevice(const rclcpp::NodeOptions& options)
+  : Node("k4a_ros_device_node", options)
+  , k4a_device_(nullptr)
+  , k4a_playback_handle_(nullptr)
+  ,
 // clang-format off
 #if defined(K4A_BODY_TRACKING)
     k4abt_tracker_(nullptr),
     k4abt_tracker_queue_size_(0),
 #endif
-    // clang-format on
-    last_capture_time_usec_(0),
-    last_imu_time_usec_(0),
-    imu_stream_end_of_file_(false)
+  // clang-format on
+  last_capture_time_usec_(0)
+  , last_imu_time_usec_(0)
+  , imu_stream_end_of_file_(false)
 {
   // Declare an image transport
   auto image_transport_ = new image_transport::ImageTransport(static_cast<rclcpp::Node::SharedPtr>(this));
@@ -79,21 +80,21 @@ K4AROSDevice::K4AROSDevice()
   this->declare_parameter("subordinate_delay_off_master_usec", rclcpp::ParameterValue(0));
 
   // Collect ROS parameters from the param server or from the command line
-#define LIST_ENTRY(param_variable, param_help_string, param_type, param_default_val) \
+#define LIST_ENTRY(param_variable, param_help_string, param_type, param_default_val)                                   \
   this->get_parameter_or(#param_variable, params_.param_variable, param_default_val);
   ROS_PARAM_LIST
 #undef LIST_ENTRY
 
   if (params_.recording_file != "")
   {
-    RCLCPP_INFO(this->get_logger(),"Node is started in playback mode");
-    RCLCPP_INFO_STREAM(this->get_logger(),"Try to open recording file " << params_.recording_file);
+    RCLCPP_INFO(this->get_logger(), "Node is started in playback mode");
+    RCLCPP_INFO_STREAM(this->get_logger(), "Try to open recording file " << params_.recording_file);
 
     // Open recording file and print its length
     k4a_playback_handle_ = k4a::playback::open(params_.recording_file.c_str());
     auto recording_length = k4a_playback_handle_.get_recording_length();
-    RCLCPP_INFO_STREAM(this->get_logger(),"Successfully openend recording file. Recording is " << recording_length.count() / 1000000
-                                                                         << " seconds long");
+    RCLCPP_INFO_STREAM(this->get_logger(), "Successfully openend recording file. Recording is "
+                                               << recording_length.count() / 1000000 << " seconds long");
 
     // Get the recordings configuration to overwrite node parameters
     k4a_record_configuration_t record_config = k4a_playback_handle_.get_record_configuration();
@@ -117,7 +118,7 @@ K4AROSDevice::K4AROSDevice()
     // Disable color if the recording has no color track
     if (params_.color_enabled && !record_config.color_track_enabled)
     {
-      RCLCPP_WARN(this->get_logger(),"Disabling color and rgb_point_cloud because recording has no color track");
+      RCLCPP_WARN(this->get_logger(), "Disabling color and rgb_point_cloud because recording has no color track");
       params_.color_enabled = false;
       params_.rgb_point_cloud = false;
     }
@@ -126,7 +127,7 @@ K4AROSDevice::K4AROSDevice()
     {
       if (params_.color_format == "jpeg" && record_config.color_format != K4A_IMAGE_FORMAT_COLOR_MJPG)
       {
-        RCLCPP_FATAL(this->get_logger(),"Converting color images to K4A_IMAGE_FORMAT_COLOR_MJPG is not supported.");
+        RCLCPP_FATAL(this->get_logger(), "Converting color images to K4A_IMAGE_FORMAT_COLOR_MJPG is not supported.");
         rclcpp::shutdown();
         return;
       }
@@ -141,7 +142,7 @@ K4AROSDevice::K4AROSDevice()
     {
       if (params_.depth_enabled)
       {
-        RCLCPP_WARN(this->get_logger(),"Disabling depth because recording has neither ir track nor depth track");
+        RCLCPP_WARN(this->get_logger(), "Disabling depth because recording has neither ir track nor depth track");
         params_.depth_enabled = false;
       }
     }
@@ -151,12 +152,12 @@ K4AROSDevice::K4AROSDevice()
     {
       if (params_.point_cloud)
       {
-        RCLCPP_WARN(this->get_logger(),"Disabling point cloud because recording has no depth track");
+        RCLCPP_WARN(this->get_logger(), "Disabling point cloud because recording has no depth track");
         params_.point_cloud = false;
       }
       if (params_.rgb_point_cloud)
       {
-        RCLCPP_WARN(this->get_logger(),"Disabling rgb point cloud because recording has no depth track");
+        RCLCPP_WARN(this->get_logger(), "Disabling rgb point cloud because recording has no depth track");
         params_.rgb_point_cloud = false;
       }
     }
@@ -164,22 +165,23 @@ K4AROSDevice::K4AROSDevice()
   else
   {
     // Print all parameters
-    RCLCPP_INFO(this->get_logger(),"K4A Parameters:");
+    RCLCPP_INFO(this->get_logger(), "K4A Parameters:");
     params_.Print();
 
     // Setup the K4A device
     uint32_t k4a_device_count = k4a::device::get_installed_count();
 
-    RCLCPP_INFO_STREAM(this->get_logger(),"Found " << k4a_device_count << " sensors");
+    RCLCPP_INFO_STREAM(this->get_logger(), "Found " << k4a_device_count << " sensors");
 
     if (params_.sensor_sn != "")
     {
-      RCLCPP_INFO_STREAM(this->get_logger(),"Searching for sensor with serial number: " << params_.sensor_sn);
+      RCLCPP_INFO_STREAM(this->get_logger(), "Searching for sensor with serial number: " << params_.sensor_sn);
     }
     else
     {
-      RCLCPP_INFO(this->get_logger(),"No serial number provided: picking first sensor");
-      RCLCPP_WARN_EXPRESSION(this->get_logger(),k4a_device_count > 1, "Multiple sensors connected! Picking first sensor.");
+      RCLCPP_INFO(this->get_logger(), "No serial number provided: picking first sensor");
+      RCLCPP_WARN_EXPRESSION(this->get_logger(), k4a_device_count > 1,
+                             "Multiple sensors connected! Picking first sensor.");
     }
 
     for (uint32_t i = 0; i < k4a_device_count; i++)
@@ -191,11 +193,11 @@ K4AROSDevice::K4AROSDevice()
       }
       catch (exception const&)
       {
-        RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to open K4A device at index " << i);
+        RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to open K4A device at index " << i);
         continue;
       }
 
-      RCLCPP_INFO_STREAM(this->get_logger(),"K4A[" << i << "] : " << device.get_serialnum());
+      RCLCPP_INFO_STREAM(this->get_logger(), "K4A[" << i << "] : " << device.get_serialnum());
 
       // Try to match serial number
       if (params_.sensor_sn != "")
@@ -216,24 +218,54 @@ K4AROSDevice::K4AROSDevice()
 
     if (!k4a_device_)
     {
-      RCLCPP_ERROR(this->get_logger(),"Failed to open a K4A device. Cannot continue.");
+      RCLCPP_ERROR(this->get_logger(), "Failed to open a K4A device. Cannot continue.");
       return;
     }
 
-    RCLCPP_INFO_STREAM(this->get_logger(),"K4A Serial Number: " << k4a_device_.get_serialnum());
+    RCLCPP_INFO_STREAM(this->get_logger(), "K4A Serial Number: " << k4a_device_.get_serialnum());
 
     k4a_hardware_version_t version_info = k4a_device_.get_version();
 
-    RCLCPP_INFO(this->get_logger(),"RGB Version: %d.%d.%d", version_info.rgb.major, version_info.rgb.minor, version_info.rgb.iteration);
+    RCLCPP_INFO(this->get_logger(), "RGB Version: %d.%d.%d", version_info.rgb.major, version_info.rgb.minor,
+                version_info.rgb.iteration);
 
-    RCLCPP_INFO(this->get_logger(),"Depth Version: %d.%d.%d", version_info.depth.major, version_info.depth.minor,
-             version_info.depth.iteration);
+    RCLCPP_INFO(this->get_logger(), "Depth Version: %d.%d.%d", version_info.depth.major, version_info.depth.minor,
+                version_info.depth.iteration);
 
-    RCLCPP_INFO(this->get_logger(),"Audio Version: %d.%d.%d", version_info.audio.major, version_info.audio.minor,
-             version_info.audio.iteration);
+    RCLCPP_INFO(this->get_logger(), "Audio Version: %d.%d.%d", version_info.audio.major, version_info.audio.minor,
+                version_info.audio.iteration);
 
-    RCLCPP_INFO(this->get_logger(),"Depth Sensor Version: %d.%d.%d", version_info.depth_sensor.major, version_info.depth_sensor.minor,
-             version_info.depth_sensor.iteration);
+    RCLCPP_INFO(this->get_logger(), "Depth Sensor Version: %d.%d.%d", version_info.depth_sensor.major,
+                version_info.depth_sensor.minor, version_info.depth_sensor.iteration);
+
+    std::thread([this]() {
+      k4a_result_t result = startCameras();
+
+      if (result != K4A_RESULT_SUCCEEDED)
+      {
+        RCLCPP_ERROR_STREAM(get_logger(), "Failed to start cameras");
+        return;
+      }
+
+      result = startImu();
+      if (result != K4A_RESULT_SUCCEEDED)
+      {
+        RCLCPP_ERROR_STREAM(get_logger(), "Failed to start IMU");
+        return;
+      }
+
+      RCLCPP_INFO(get_logger(), "K4A Started");
+
+      if (result == K4A_RESULT_SUCCEEDED)
+      {
+        RCLCPP_INFO(get_logger(), "ROS Spin");
+      }
+      else
+      {
+        RCLCPP_ERROR(get_logger(), "Failed to start cameras");
+        rclcpp::shutdown();
+      }
+    }).detach();
   }
 
   // Register our topics
@@ -268,15 +300,17 @@ K4AROSDevice::K4AROSDevice()
 
   imu_orientation_publisher_ = this->create_publisher<Imu>("imu", 200);
 
-  if (params_.point_cloud || params_.rgb_point_cloud) {
+  if (params_.point_cloud || params_.rgb_point_cloud)
+  {
     pointcloud_publisher_ = this->create_publisher<PointCloud2>("points2", 1);
   }
 
 #if defined(K4A_BODY_TRACKING)
-  if (params_.body_tracking_enabled) {
+  if (params_.body_tracking_enabled)
+  {
     body_marker_publisher_ = this->create_publisher<MarkerArray>("body_tracking_data", 1);
 
-    body_index_map_publisher_ = image_transport::create_publisher(this,"body_index_map/image_raw");
+    body_index_map_publisher_ = image_transport::create_publisher(this, "body_index_map/image_raw");
   }
 #endif
 }
@@ -288,20 +322,20 @@ K4AROSDevice::~K4AROSDevice()
 
 #if defined(K4A_BODY_TRACKING)
   // Join the publisher thread
-  RCLCPP_INFO(this->get_logger(),"Joining body publisher thread");
+  RCLCPP_INFO(this->get_logger(), "Joining body publisher thread");
   body_publisher_thread_.join();
-  RCLCPP_INFO(this->get_logger(),"Body publisher thread joined");
+  RCLCPP_INFO(this->get_logger(), "Body publisher thread joined");
 #endif
 
   // Join the publisher thread
-  RCLCPP_INFO(this->get_logger(),"Joining camera publisher thread");
+  RCLCPP_INFO(this->get_logger(), "Joining camera publisher thread");
   frame_publisher_thread_.join();
-  RCLCPP_INFO(this->get_logger(),"Camera publisher thread joined");
+  RCLCPP_INFO(this->get_logger(), "Camera publisher thread joined");
 
   // Join the publisher thread
-  RCLCPP_INFO(this->get_logger(),"Joining IMU publisher thread");
+  RCLCPP_INFO(this->get_logger(), "Joining IMU publisher thread");
   imu_publisher_thread_.join();
-  RCLCPP_INFO(this->get_logger(),"IMU publisher thread joined");
+  RCLCPP_INFO(this->get_logger(), "IMU publisher thread joined");
 
   stopCameras();
   stopImu();
@@ -328,7 +362,7 @@ k4a_result_t K4AROSDevice::startCameras()
   {
     if (result != K4A_RESULT_SUCCEEDED)
     {
-      RCLCPP_ERROR(this->get_logger(),"Failed to generate a device configuration. Not starting camera!");
+      RCLCPP_ERROR(this->get_logger(), "Failed to generate a device configuration. Not starting camera!");
       return result;
     }
 
@@ -354,7 +388,7 @@ k4a_result_t K4AROSDevice::startCameras()
 
   if (k4a_device_)
   {
-    RCLCPP_INFO_STREAM(this->get_logger(),"STARTING CAMERAS");
+    RCLCPP_INFO_STREAM(this->get_logger(), "STARTING CAMERAS");
     k4a_device_.start_cameras(&k4a_configuration);
   }
 
@@ -380,7 +414,7 @@ k4a_result_t K4AROSDevice::startImu()
 {
   if (k4a_device_)
   {
-    RCLCPP_INFO_STREAM(this->get_logger(),"STARTING IMU");
+    RCLCPP_INFO_STREAM(this->get_logger(), "STARTING IMU");
     k4a_device_.start_imu();
   }
 
@@ -395,9 +429,9 @@ void K4AROSDevice::stopCameras()
   if (k4a_device_)
   {
     // Stop the K4A SDK
-    RCLCPP_INFO(this->get_logger(),"Stopping K4A device");
+    RCLCPP_INFO(this->get_logger(), "Stopping K4A device");
     k4a_device_.stop_cameras();
-    RCLCPP_INFO(this->get_logger(),"K4A device stopped");
+    RCLCPP_INFO(this->get_logger(), "K4A device stopped");
   }
 }
 
@@ -409,14 +443,14 @@ void K4AROSDevice::stopImu()
   }
 }
 
-k4a_result_t K4AROSDevice::getDepthFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::Image>& depth_image,
-                                          bool rectified = false)
+k4a_result_t K4AROSDevice::getDepthFrame(const k4a::capture& capture,
+                                         std::shared_ptr<sensor_msgs::msg::Image>& depth_image, bool rectified = false)
 {
   k4a::image k4a_depth_frame = capture.get_depth_image();
 
   if (!k4a_depth_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render depth frame: no frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render depth frame: no frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -431,28 +465,31 @@ k4a_result_t K4AROSDevice::getDepthFrame(const k4a::capture& capture, std::share
   return renderDepthToROS(depth_image, k4a_depth_frame);
 }
 
-k4a_result_t K4AROSDevice::renderDepthToROS(std::shared_ptr<sensor_msgs::msg::Image>& depth_image, k4a::image& k4a_depth_frame)
+k4a_result_t K4AROSDevice::renderDepthToROS(std::shared_ptr<sensor_msgs::msg::Image>& depth_image,
+                                            k4a::image& k4a_depth_frame)
 {
   cv::Mat depth_frame_buffer_mat(k4a_depth_frame.get_height_pixels(), k4a_depth_frame.get_width_pixels(), CV_16UC1,
                                  k4a_depth_frame.get_buffer());
   std::string encoding;
 
-  if (params_.depth_unit == sensor_msgs::image_encodings::TYPE_32FC1) {
+  if (params_.depth_unit == sensor_msgs::image_encodings::TYPE_32FC1)
+  {
     // convert from 16 bit integer millimetre to 32 bit float metre
     depth_frame_buffer_mat.convertTo(depth_frame_buffer_mat, CV_32FC1, 1.0 / 1000.0f);
     encoding = sensor_msgs::image_encodings::TYPE_32FC1;
   }
-  else if (params_.depth_unit == sensor_msgs::image_encodings::TYPE_16UC1) {
+  else if (params_.depth_unit == sensor_msgs::image_encodings::TYPE_16UC1)
+  {
     // source data is already in 'K4A_IMAGE_FORMAT_DEPTH16' format
     encoding = sensor_msgs::image_encodings::TYPE_16UC1;
   }
-  else {
+  else
+  {
     RCLCPP_ERROR_STREAM(this->get_logger(), "Invalid depth unit: " << params_.depth_unit);
     return K4A_RESULT_FAILED;
   }
 
-  depth_image =
-      cv_bridge::CvImage(std_msgs::msg::Header(), encoding, depth_frame_buffer_mat).toImageMsg();
+  depth_image = cv_bridge::CvImage(std_msgs::msg::Header(), encoding, depth_frame_buffer_mat).toImageMsg();
 
   return K4A_RESULT_SUCCEEDED;
 }
@@ -463,7 +500,7 @@ k4a_result_t K4AROSDevice::getIrFrame(const k4a::capture& capture, std::shared_p
 
   if (!k4a_ir_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render IR frame: no frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render IR frame: no frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -486,19 +523,21 @@ k4a_result_t K4AROSDevice::renderIrToROS(std::shared_ptr<sensor_msgs::msg::Image
   }
   else
   {
-    ir_image = cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::MONO16, ir_buffer_mat).toImageMsg();
+    ir_image =
+        cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::MONO16, ir_buffer_mat).toImageMsg();
   }
 
   return K4A_RESULT_SUCCEEDED;
 }
 
-k4a_result_t K4AROSDevice::getJpegRgbFrame(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::CompressedImage>& jpeg_image)
+k4a_result_t K4AROSDevice::getJpegRgbFrame(const k4a::capture& capture,
+                                           std::shared_ptr<sensor_msgs::msg::CompressedImage>& jpeg_image)
 {
   k4a::image k4a_jpeg_frame = capture.get_color_image();
 
   if (!k4a_jpeg_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render Jpeg frame: no frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render Jpeg frame: no frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -515,7 +554,7 @@ k4a_result_t K4AROSDevice::getRbgFrame(const k4a::capture& capture, std::shared_
 
   if (!k4a_bgra_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render BGRA frame: no frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render BGRA frame: no frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -524,7 +563,7 @@ k4a_result_t K4AROSDevice::getRbgFrame(const k4a::capture& capture, std::shared_
 
   if (k4a_bgra_frame.get_size() != color_image_size)
   {
-    RCLCPP_WARN(this->get_logger(),"Invalid k4a_bgra_frame returned from K4A");
+    RCLCPP_WARN(this->get_logger(), "Invalid k4a_bgra_frame returned from K4A");
     return K4A_RESULT_FAILED;
   }
 
@@ -543,12 +582,14 @@ k4a_result_t K4AROSDevice::getRbgFrame(const k4a::capture& capture, std::shared_
 
 // Helper function that renders any BGRA K4A frame to a ROS ImagePtr. Useful for rendering intermediary frames
 // during debugging of image processing functions
-k4a_result_t K4AROSDevice::renderBGRA32ToROS(std::shared_ptr<sensor_msgs::msg::Image>& rgb_image, k4a::image& k4a_bgra_frame)
+k4a_result_t K4AROSDevice::renderBGRA32ToROS(std::shared_ptr<sensor_msgs::msg::Image>& rgb_image,
+                                             k4a::image& k4a_bgra_frame)
 {
   cv::Mat rgb_buffer_mat(k4a_bgra_frame.get_height_pixels(), k4a_bgra_frame.get_width_pixels(), CV_8UC4,
                          k4a_bgra_frame.get_buffer());
 
-  rgb_image = cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::BGRA8, rgb_buffer_mat).toImageMsg();
+  rgb_image =
+      cv_bridge::CvImage(std_msgs::msg::Header(), sensor_msgs::image_encodings::BGRA8, rgb_buffer_mat).toImageMsg();
 
   return K4A_RESULT_SUCCEEDED;
 }
@@ -559,14 +600,14 @@ k4a_result_t K4AROSDevice::getRgbPointCloudInDepthFrame(const k4a::capture& capt
   const k4a::image k4a_depth_frame = capture.get_depth_image();
   if (!k4a_depth_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render RGB point cloud: no depth frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render RGB point cloud: no depth frame");
     return K4A_RESULT_FAILED;
   }
 
   const k4a::image k4a_bgra_frame = capture.get_color_image();
   if (!k4a_bgra_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render RGB point cloud: no BGRA frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render RGB point cloud: no BGRA frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -591,14 +632,14 @@ k4a_result_t K4AROSDevice::getRgbPointCloudInRgbFrame(const k4a::capture& captur
   k4a::image k4a_depth_frame = capture.get_depth_image();
   if (!k4a_depth_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render RGB point cloud: no depth frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render RGB point cloud: no depth frame");
     return K4A_RESULT_FAILED;
   }
 
   k4a::image k4a_bgra_frame = capture.get_color_image();
   if (!k4a_bgra_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render RGB point cloud: no BGRA frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render RGB point cloud: no BGRA frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -616,13 +657,14 @@ k4a_result_t K4AROSDevice::getRgbPointCloudInRgbFrame(const k4a::capture& captur
   return fillColorPointCloud(calibration_data_.point_cloud_image_, k4a_bgra_frame, point_cloud);
 }
 
-k4a_result_t K4AROSDevice::getPointCloud(const k4a::capture& capture, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud)
+k4a_result_t K4AROSDevice::getPointCloud(const k4a::capture& capture,
+                                         std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud)
 {
   k4a::image k4a_depth_frame = capture.get_depth_image();
 
   if (!k4a_depth_frame)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render point cloud: no depth frame");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render point cloud: no depth frame");
     return K4A_RESULT_FAILED;
   }
 
@@ -648,7 +690,7 @@ k4a_result_t K4AROSDevice::fillColorPointCloud(const k4a::image& pointcloud_imag
   const size_t pixel_count = color_image.get_size() / sizeof(BgraPixel);
   if (point_count != pixel_count)
   {
-    RCLCPP_WARN(this->get_logger(),"Color and depth image sizes do not match!");
+    RCLCPP_WARN(this->get_logger(), "Color and depth image sizes do not match!");
     return K4A_RESULT_FAILED;
   }
 
@@ -695,7 +737,8 @@ k4a_result_t K4AROSDevice::fillColorPointCloud(const k4a::image& pointcloud_imag
   return K4A_RESULT_SUCCEEDED;
 }
 
-k4a_result_t K4AROSDevice::fillPointCloud(const k4a::image& pointcloud_image, std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud)
+k4a_result_t K4AROSDevice::fillPointCloud(const k4a::image& pointcloud_image,
+                                          std::shared_ptr<sensor_msgs::msg::PointCloud2>& point_cloud)
 {
   point_cloud->height = pointcloud_image.get_height_pixels();
   point_cloud->width = pointcloud_image.get_width_pixels();
@@ -757,7 +800,8 @@ k4a_result_t K4AROSDevice::getImuFrame(const k4a_imu_sample_t& sample, std::shar
 }
 
 #if defined(K4A_BODY_TRACKING)
-k4a_result_t K4AROSDevice::getBodyMarker(const k4abt_body_t& body, std::shared_ptr<visualization_msgs::msg::Marker> marker_msg, int jointType,
+k4a_result_t K4AROSDevice::getBodyMarker(const k4abt_body_t& body,
+                                         std::shared_ptr<visualization_msgs::msg::Marker> marker_msg, int jointType,
                                          rclcpp::Time capture_time)
 {
   k4a_float3_t position = body.skeleton.joints[jointType].position;
@@ -794,13 +838,14 @@ k4a_result_t K4AROSDevice::getBodyMarker(const k4abt_body_t& body, std::shared_p
   return K4A_RESULT_SUCCEEDED;
 }
 
-k4a_result_t K4AROSDevice::getBodyIndexMap(const k4abt::frame& body_frame, std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image)
+k4a_result_t K4AROSDevice::getBodyIndexMap(const k4abt::frame& body_frame,
+                                           std::shared_ptr<sensor_msgs::msg::Image> body_index_map_image)
 {
   k4a::image k4a_body_index_map = body_frame.get_body_index_map();
 
   if (!k4a_body_index_map)
   {
-    RCLCPP_ERROR(this->get_logger(),"Cannot render body index map: no body index map");
+    RCLCPP_ERROR(this->get_logger(), "Cannot render body index map: no body index map");
     return K4A_RESULT_FAILED;
   }
 
@@ -878,7 +923,7 @@ void K4AROSDevice::framePublisherThread()
     {
       if (!k4a_device_.get_capture(&capture, waitTime))
       {
-        RCLCPP_FATAL(this->get_logger(),"Failed to poll cameras: node cannot continue.");
+        RCLCPP_FATAL(this->get_logger(), "Failed to poll cameras: node cannot continue.");
         rclcpp::shutdown();
         return;
       }
@@ -914,7 +959,7 @@ void K4AROSDevice::framePublisherThread()
         }
         else
         {
-          RCLCPP_INFO(this->get_logger(),"Recording reached end of file. node cannot continue.");
+          RCLCPP_INFO(this->get_logger(), "Recording reached end of file. node cannot continue.");
           rclcpp::shutdown();
           return;
         }
@@ -938,14 +983,14 @@ void K4AROSDevice::framePublisherThread()
       // Recordings may not have synchronized captures. For unsynchronized captures without ir image skip ir frame.
 
       if ((this->count_subscribers("ir/image_raw") > 0 || this->count_subscribers("ir/camera_info") > 0) &&
-           (k4a_device_ || capture.get_ir_image() != nullptr))
+          (k4a_device_ || capture.get_ir_image() != nullptr))
       {
         // IR images are available in all depth modes
         result = getIrFrame(capture, ir_raw_frame);
 
         if (result != K4A_RESULT_SUCCEEDED)
         {
-          RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get raw IR frame");
+          RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get raw IR frame");
           rclcpp::shutdown();
           return;
         }
@@ -970,14 +1015,14 @@ void K4AROSDevice::framePublisherThread()
         // Recordings may not have synchronized captures. For unsynchronized captures without depth image skip depth
         // frame.
 
-          if ((this->count_subscribers("depth/image_raw") > 0 || this->count_subscribers("depth/camera_info") > 0) &&
-             (k4a_device_ || capture.get_depth_image() != nullptr))
+        if ((this->count_subscribers("depth/image_raw") > 0 || this->count_subscribers("depth/camera_info") > 0) &&
+            (k4a_device_ || capture.get_depth_image() != nullptr))
         {
           result = getDepthFrame(capture, depth_raw_frame);
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get raw depth frame");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get raw depth frame");
             rclcpp::shutdown();
             return;
           }
@@ -1000,16 +1045,16 @@ void K4AROSDevice::framePublisherThread()
         // Recordings may not have synchronized captures. For unsynchronized captures without depth image skip rect
         // depth frame.
 
-          if (params_.color_enabled &&
-             (this->count_subscribers("depth_to_rgb/image_raw") > 0 ||
-              this->count_subscribers("depth_to_rgb/camera_info") > 0) &&
-             (k4a_device_ || capture.get_depth_image() != nullptr))
+        if (params_.color_enabled &&
+            (this->count_subscribers("depth_to_rgb/image_raw") > 0 || this->count_subscribers("depth_to_rgb/"
+                                                                                              "camera_info") > 0) &&
+            (k4a_device_ || capture.get_depth_image() != nullptr))
         {
           result = getDepthFrame(capture, depth_rect_frame, true /* rectified */);
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get rectifed depth frame");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get rectifed depth frame");
             rclcpp::shutdown();
             return;
           }
@@ -1030,11 +1075,12 @@ void K4AROSDevice::framePublisherThread()
 #if defined(K4A_BODY_TRACKING)
         // Publish body markers when body tracking is enabled and a depth image is available
         if (params_.body_tracking_enabled && k4abt_tracker_queue_size_ < 3 &&
-            (this->count_subscribers("body_tracking_data") > 0 || this->count_subscribers("body_index_map/image_raw") > 0))
+            (this->count_subscribers("body_tracking_data") > 0 ||
+             this->count_subscribers("body_index_map/image_raw") > 0))
         {
           if (!k4abt_tracker_.enqueue_capture(capture))
           {
-            RCLCPP_ERROR(this->get_logger(),"Error! Add capture to tracker process queue failed!");
+            RCLCPP_ERROR(this->get_logger(), "Error! Add capture to tracker process queue failed!");
             rclcpp::shutdown();
             return;
           }
@@ -1053,14 +1099,15 @@ void K4AROSDevice::framePublisherThread()
       // Recordings may not have synchronized captures. For unsynchronized captures without color image skip rgb frame.
       if (params_.color_format == "jpeg")
       {
-        if ((this->count_subscribers("rgb/image_raw/compressed") > 0 || this->count_subscribers("rgb/camera_info") > 0) &&
+        if ((this->count_subscribers("rgb/image_raw/compressed") > 0 ||
+             this->count_subscribers("rgb/camera_info") > 0) &&
             (k4a_device_ || capture.get_color_image() != nullptr))
         {
           result = getJpegRgbFrame(capture, rgb_jpeg_frame);
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get Jpeg frame");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get Jpeg frame");
             rclcpp::shutdown();
             return;
           }
@@ -1085,7 +1132,7 @@ void K4AROSDevice::framePublisherThread()
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get RGB frame");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get RGB frame");
             rclcpp::shutdown();
             return;
           }
@@ -1106,14 +1153,15 @@ void K4AROSDevice::framePublisherThread()
         // not have synchronized captures. For unsynchronized captures image skip rgb rect frame.
 
         if (params_.depth_enabled && (calibration_data_.k4a_calibration_.depth_mode != K4A_DEPTH_MODE_PASSIVE_IR) &&
-            (this->count_subscribers("rgb_to_depth/image_raw") > 0 || this->count_subscribers("rgb_to_depth/camera_info") > 0) &&
+            (this->count_subscribers("rgb_to_depth/image_raw") > 0 || this->count_subscribers("rgb_to_depth/"
+                                                                                              "camera_info") > 0) &&
             (k4a_device_ || (capture.get_color_image() != nullptr && capture.get_depth_image() != nullptr)))
         {
           result = getRbgFrame(capture, rgb_rect_frame, true /* rectified */);
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get rectifed depth frame");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get rectifed depth frame");
             rclcpp::shutdown();
             return;
           }
@@ -1135,7 +1183,7 @@ void K4AROSDevice::framePublisherThread()
     // Recordings may not have synchronized captures. In unsynchronized captures skip point cloud.
 
     if (this->count_subscribers("points2") > 0 &&
-      (k4a_device_ || (capture.get_color_image() != nullptr && capture.get_depth_image() != nullptr)))
+        (k4a_device_ || (capture.get_color_image() != nullptr && capture.get_depth_image() != nullptr)))
     {
       if (params_.rgb_point_cloud)
       {
@@ -1150,7 +1198,7 @@ void K4AROSDevice::framePublisherThread()
 
         if (result != K4A_RESULT_SUCCEEDED)
         {
-          RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get RGB Point Cloud");
+          RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get RGB Point Cloud");
           rclcpp::shutdown();
           return;
         }
@@ -1161,7 +1209,7 @@ void K4AROSDevice::framePublisherThread()
 
         if (result != K4A_RESULT_SUCCEEDED)
         {
-          RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get Point Cloud");
+          RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get Point Cloud");
           rclcpp::shutdown();
           return;
         }
@@ -1173,7 +1221,6 @@ void K4AROSDevice::framePublisherThread()
       }
     }
 
-    rclcpp::spin_some(shared_from_this());
     loop_rate.sleep();
   }
 }
@@ -1190,14 +1237,14 @@ void K4AROSDevice::bodyPublisherThread()
 
       if (body_frame == nullptr)
       {
-        RCLCPP_ERROR_STREAM(this->get_logger(),"Pop body frame result failed!");
+        RCLCPP_ERROR_STREAM(this->get_logger(), "Pop body frame result failed!");
         rclcpp::shutdown();
         return;
       }
       else
       {
         auto capture_time = timestampToROS(body_frame.get_device_timestamp());
-        
+
         if (this->count_subscribers("body_tracking_data") > 0)
         {
           // Joint marker array
@@ -1206,7 +1253,7 @@ void K4AROSDevice::bodyPublisherThread()
           for (size_t i = 0; i < num_bodies; ++i)
           {
             k4abt_body_t body = body_frame.get_body(i);
-            for (int j = 0; j < (int) K4ABT_JOINT_COUNT; ++j)
+            for (int j = 0; j < (int)K4ABT_JOINT_COUNT; ++j)
             {
               Marker::SharedPtr markerPtr(new Marker);
               getBodyMarker(body, markerPtr, j, capture_time);
@@ -1224,7 +1271,7 @@ void K4AROSDevice::bodyPublisherThread()
 
           if (result != K4A_RESULT_SUCCEEDED)
           {
-            RCLCPP_ERROR_STREAM(this->get_logger(),"Failed to get body index map");
+            RCLCPP_ERROR_STREAM(this->get_logger(), "Failed to get body index map");
             rclcpp::shutdown();
             return;
           }
@@ -1323,7 +1370,8 @@ void K4AROSDevice::imuPublisherThread()
 
             if (std::abs(imu_msg->angular_velocity.x) > DBL_EPSILON ||
                 std::abs(imu_msg->angular_velocity.y) > DBL_EPSILON ||
-                std::abs(imu_msg->angular_velocity.z) > DBL_EPSILON){
+                std::abs(imu_msg->angular_velocity.z) > DBL_EPSILON)
+            {
               imu_orientation_publisher_->publish(*imu_msg);
             }
           }
@@ -1370,7 +1418,8 @@ void K4AROSDevice::imuPublisherThread()
 
             if (std::abs(imu_msg->angular_velocity.x) > DBL_EPSILON ||
                 std::abs(imu_msg->angular_velocity.y) > DBL_EPSILON ||
-                std::abs(imu_msg->angular_velocity.z) > DBL_EPSILON){
+                std::abs(imu_msg->angular_velocity.z) > DBL_EPSILON)
+            {
               imu_orientation_publisher_->publish(*imu_msg);
             }
 
@@ -1435,7 +1484,7 @@ void K4AROSDevice::initializeTimestampOffset(const std::chrono::microseconds& k4
   device_to_realtime_offset_ = realtime_clock - k4a_device_timestamp_us;
 
   RCLCPP_WARN_STREAM(this->get_logger(), "Initializing the device to realtime offset based on wall clock: "
-                  << device_to_realtime_offset_.count() << " ns");
+                                             << device_to_realtime_offset_.count() << " ns");
 }
 
 void K4AROSDevice::updateTimestampOffset(const std::chrono::microseconds& k4a_device_timestamp_us,
@@ -1459,8 +1508,8 @@ void K4AROSDevice::updateTimestampOffset(const std::chrono::microseconds& k4a_de
   if (device_to_realtime_offset_.count() == 0 ||
       std::abs((device_to_realtime_offset_ - device_to_realtime).count()) > 1e7)
   {
-    RCLCPP_WARN_STREAM(this->get_logger(), "Initializing or re-initializing the device to realtime offset: " << device_to_realtime.count()
-                                                                                      << " ns");
+    RCLCPP_WARN_STREAM(this->get_logger(), "Initializing or re-initializing the device to realtime offset: "
+                                               << device_to_realtime.count() << " ns");
     device_to_realtime_offset_ = device_to_realtime;
   }
   else

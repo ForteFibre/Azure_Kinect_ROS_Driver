@@ -39,15 +39,26 @@ find_package(angles REQUIRED)
 
 
 ## Declare a C++ executable
-add_executable(${PROJECT_NAME}_node
+# add_executable(${PROJECT_NAME}_node
+#   src/k4a_ros_bridge_node.cpp
+#   src/k4a_ros_device.cpp
+#   src/k4a_ros_device_params.cpp
+#   src/k4a_calibration_transform_data.cpp
+#   )
+
+
+add_library(${PROJECT_NAME}_node SHARED
   src/k4a_ros_bridge_node.cpp
   src/k4a_ros_device.cpp
   src/k4a_ros_device_params.cpp
   src/k4a_calibration_transform_data.cpp
   )
 
-ament_target_dependencies(${PROJECT_NAME}_node rclcpp 
-  std_msgs 
+rclcpp_components_register_nodes(${PROJECT_NAME}_node "kinect::K4AROSBridgeNode")
+
+ament_target_dependencies(${PROJECT_NAME}_node rclcpp
+  rclcpp_components
+  std_msgs
   sensor_msgs
   visualization_msgs
   image_transport
@@ -127,5 +138,6 @@ install(
   urdf
   DESTINATION share/${PROJECT_NAME}/
 )
+ament_export_libraries(${PROJECT_NAME}_name)
 
 ament_package()
